@@ -35,7 +35,7 @@ namespace Calc2
         private StateMachine<States, Triggers> Machine { get; }
         private StateMachine<States, Triggers>.TriggerWithParameters<char> InputNumberChar;
         private StateMachine<States, Triggers>.TriggerWithParameters<char> InputOperatorChar;
-        private readonly StateMachine<States, Triggers>.TriggerWithParameters<string> ShowErrorText;
+        private StateMachine<States, Triggers>.TriggerWithParameters<string> ShowErrorText { get; }
 
         private States _state = States.StartFirstOperand;
 
