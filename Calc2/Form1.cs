@@ -31,8 +31,8 @@ namespace Calc2
         }
 
         private StateMachine<States, Triggers> Machine { get; }
-        private StateMachine<States, Triggers>.TriggerWithParameters<char> InputNumberChar;
-        private StateMachine<States, Triggers>.TriggerWithParameters<char> InputOperatorChar;
+        private readonly StateMachine<States, Triggers>.TriggerWithParameters<char> InputNumberChar;
+        private readonly StateMachine<States, Triggers>.TriggerWithParameters<char> InputOperatorChar;
 
         private States _state = States.StartFirstOperand;
 
@@ -110,6 +110,7 @@ namespace Calc2
                 .PermitReentry(Triggers.InputNumber)
                 .PermitReentry(Triggers.Backspace)
                 .PermitReentry(Triggers.InputDot)
+                .PermitReentry(Triggers.Clear)
                 .Permit(Triggers.GoEnterOperand, States.EnterFirstOperand)
                 .Permit(Triggers.GoStartOperand, States.StartSecondOperand)
                 .OnEntryFrom(InputNumberChar, symbol =>
@@ -154,6 +155,13 @@ namespace Calc2
                     {
                         FirstOperand = "0";
                     }
+                })
+                .OnEntryFrom(Triggers.Clear, () =>
+                {
+                    FirstOperand = "0";
+                    SecondOperand = "";
+                    Operator = "";
+                    Result = "";
                 });
 
             Machine.Configure(States.EnterFirstOperand)
@@ -163,6 +171,7 @@ namespace Calc2
                 .PermitReentry(Triggers.Backspace)
                 .Permit(Triggers.GoStartOperand, States.StartFirstOperand)
                 .Permit(Triggers.GoEnterOperand, States.StartSecondOperand)
+                .Permit(Triggers.Clear, States.StartFirstOperand)
                 .OnEntryFrom(InputNumberChar, symbol =>
                 {
                     if (symbol == '0')
@@ -203,6 +212,10 @@ namespace Calc2
                         FirstOperand = "0";
                         Machine.Fire(Triggers.GoStartOperand);
                     }
+                })
+                .OnEntryFrom(Triggers.Clear, () =>
+                {
+                    Machine.Fire(Triggers.Clear);
                 });
 
             Machine.Configure(States.StartSecondOperand)
@@ -210,6 +223,7 @@ namespace Calc2
                 .PermitReentry(Triggers.InputOperator)
                 .PermitReentry(Triggers.InputNumber)
                 .Permit(Triggers.GoEnterOperand, States.EnterSecondOperand)
+                .Permit(Triggers.Clear, States.StartFirstOperand)
                 .Ignore(Triggers.Backspace)
                 .OnEntryFrom(InputNumberChar, symbol =>
                 {
@@ -229,9 +243,11 @@ namespace Calc2
                 {
                     SecondOperand += "0.";
                     Machine.Fire(Triggers.GoEnterOperand);
+                })
+                .OnEntryFrom(Triggers.Clear, () =>
+                {
+                    Machine.Fire(Triggers.Clear);
                 });
-
-
 
             Machine.Configure(States.EnterSecondOperand)
                 .PermitReentry(Triggers.InputDot)
@@ -239,6 +255,7 @@ namespace Calc2
                 .PermitReentry(Triggers.InputNumber)
                 .PermitReentry(Triggers.InputOperator)
                 .Permit(Triggers.GoStartOperand, States.StartSecondOperand)
+                .Permit(Triggers.Clear, States.StartFirstOperand)
                 .OnEntryFrom(InputNumberChar, symbol =>
                 {
                     if (symbol == '0')
@@ -281,6 +298,42 @@ namespace Calc2
                 .OnEntryFrom(Triggers.InputDot, () =>
                 {
                     if (!SecondOperand.Contains(".")) SecondOperand += ".";
+                })
+                .OnEntryFrom(Triggers.Clear, () =>
+                {
+                    Machine.Fire(Triggers.Clear);
+                });
+
+            Machine.Configure(States.ShowResult)
+                .PermitReentry(Triggers.InputDot)
+                .PermitReentry(Triggers.InputNumber)
+                .PermitReentry(Triggers.InputOperator)
+                .Permit(Triggers.GoEnterOperand, States.StartSecondOperand)
+                .Permit(Triggers.GoStartOperand, States.StartFirstOperand)
+                .Permit(Triggers.Clear, States.StartFirstOperand)
+                .Ignore(Triggers.Backspace)
+                .OnEntryFrom(InputNumberChar, symbol =>
+                {
+                    FirstOperand = symbol.ToString();
+                    Result = "";
+                    Machine.Fire(Triggers.GoStartOperand);
+                })
+                .OnEntryFrom(Triggers.InputDot, () =>
+                {
+                    FirstOperand = "0.";
+                    Result = "";
+                    Machine.Fire(Triggers.GoStartOperand);
+                })
+                .OnEntryFrom(InputOperatorChar, symbol =>
+                {
+                    FirstOperand = Result;
+                    Operator = symbol.ToString();
+                    Result = "";
+                    Machine.Fire(Triggers.GoEnterOperand);
+                })
+                .OnEntryFrom(Triggers.Clear, () =>
+                {
+                    Machine.Fire(Triggers.Clear);
                 });
 
             UpdateInput();
@@ -358,14 +411,6 @@ namespace Calc2
             State = States.ShowResult;
         }
 
-        private void Clear()
-        {
-            FirstOperand = "0";
-            SecondOperand = "";
-            Operator = "";
-            State = States.StartFirstOperand;
-        }
-
         private void buttonSymbol_Click(object sender, EventArgs e)
         {
             //EnterSymbol(((Button)sender).Text[0]);
@@ -395,7 +440,7 @@ namespace Calc2
 
         private void buttonClear_Click(object sender, EventArgs e)
         {
-            Clear();
+            Machine.Fire(Triggers.Clear);
         }
     }
 }
