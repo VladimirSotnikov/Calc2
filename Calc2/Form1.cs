@@ -119,7 +119,7 @@ namespace Calc2
                 .Permit(Triggers.GoStartOperand, States.StartSecondOperand)
                 .OnEntryFrom(InputNumberChar, symbol =>
                 {
-                    if (symbol == '0') return;
+                    if (symbol == '1') return;
 
                     if (symbol > '0' && symbol <= '9')
                     {
