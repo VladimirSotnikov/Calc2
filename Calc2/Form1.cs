@@ -15,6 +15,7 @@ namespace Calc2
             StartSecondOperand,
             EnterSecondOperand,
             ShowResult,
+            ShowError,
         }
 
         public enum Triggers
@@ -28,11 +29,13 @@ namespace Calc2
             GoStartOperand,
             GoEnterOperand,
             GoShowResult,
+            ShowError,
         }
 
         private StateMachine<States, Triggers> Machine { get; }
         private StateMachine<States, Triggers>.TriggerWithParameters<char> InputNumberChar { get; }
         private StateMachine<States, Triggers>.TriggerWithParameters<char> InputOperatorChar { get; }
+        private StateMachine<States, Triggers>.TriggerWithParameters<string> ShowErrorText { get; }
 
         private States _state = States.StartFirstOperand;
 
@@ -104,6 +107,7 @@ namespace Calc2
 
             InputNumberChar = Machine.SetTriggerParameters<char>(Triggers.InputNumber);
             InputOperatorChar = Machine.SetTriggerParameters<char>(Triggers.InputOperator);
+            ShowErrorText = Machine.SetTriggerParameters<string>(Triggers.ShowError);
 
             Machine.Configure(States.StartFirstOperand)
                 .PermitReentry(Triggers.InputOperator)
@@ -256,6 +260,7 @@ namespace Calc2
                 .PermitReentry(Triggers.InputOperator)
                 .Permit(Triggers.GoStartOperand, States.StartSecondOperand)
                 .Permit(Triggers.Clear, States.StartFirstOperand)
+                .Permit(Triggers.ShowError, States.ShowError)
                 .OnEntryFrom(InputNumberChar, symbol =>
                 {
                     if (symbol == '0')
@@ -280,11 +285,18 @@ namespace Calc2
                     }
                     else
                     {
-                        Calculate();
-                        FirstOperand = Result;
-                        SecondOperand = "";
-                        Operator = symbol.ToString();
-                        Machine.Fire(Triggers.GoStartOperand);
+                        try
+                        {
+                            Calculate();
+                            FirstOperand = Result;
+                            SecondOperand = "";
+                            Operator = symbol.ToString();
+                            Machine.Fire(Triggers.GoStartOperand);
+                        }
+                        catch (Exception e)
+                        {
+                            Machine.Fire(ShowErrorText, e.Message);
+                        }
                     }
                 })
                 .OnEntryFrom(Triggers.Backspace, () =>
@@ -336,6 +348,23 @@ namespace Calc2
                     Machine.Fire(Triggers.Clear);
                 });
 
+            Machine.Configure(States.ShowError)
+                .Permit(Triggers.InputNumber, States.StartFirstOperand)
+                .Permit(Triggers.InputOperator, States.StartFirstOperand)
+                .Permit(Triggers.Backspace, States.StartFirstOperand)
+                .Permit(Triggers.Clear, States.StartFirstOperand)
+                .OnEntryFrom(ShowErrorText, text =>
+                {
+                    FirstOperand = "0";
+                    SecondOperand = "";
+                    Operator = "";
+                    Result = text;
+                })
+                .OnExit(() =>
+                {
+                    Result = "";
+                });
+
             UpdateInput();
         }
 
@@ -344,9 +373,9 @@ namespace Calc2
 
         }
 
-        private int Division(int a, int b)
+        private static double Division(double a, double b)
         {
-            if (b == 0) throw new ArgumentException("Деление на ноль невозможно!");
+            if (Math.Abs(b) <= double.Epsilon) throw new ArgumentException("Деление на ноль невозможно!");
 
             return a / b;
         }
@@ -367,10 +396,8 @@ namespace Calc2
                     Result = $"{firstOperandNumber * secondOperandNumber}";
                     break;
                 case "/":
-                    Result = $"{firstOperandNumber / secondOperandNumber}";
+                    Result = $"{Division(firstOperandNumber, secondOperandNumber)}";
                     break;
-
-
             }
         }
 
@@ -386,6 +413,7 @@ namespace Calc2
                 case States.EnterSecondOperand:
                     textBoxInput.Text = $@"{FirstOperand} {Operator} {SecondOperand}";
                     break;
+                case States.ShowError:
                 case States.ShowResult:
                     textBoxInput.Text = Result;
                     break;
@@ -404,11 +432,18 @@ namespace Calc2
         
         private void Evaluate()
         {
-            Calculate();
-            FirstOperand = "";
-            SecondOperand = "";
-            Operator = "";
-            State = States.ShowResult;
+            try
+            {
+                Calculate();
+                FirstOperand = "";
+                SecondOperand = "";
+                Operator = "";
+                State = States.ShowResult;
+            }
+            catch (Exception e)
+            {
+                Machine.Fire(ShowErrorText, e.Message);
+            }
         }
 
         private void buttonSymbol_Click(object sender, EventArgs e)
